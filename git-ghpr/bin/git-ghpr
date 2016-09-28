@@ -3,20 +3,21 @@
 usage()
 {
     cat <<EOF >&2
-usage: $(basename $0) {pull|commit} <github-fork>/<branch> <pullrequest#>
-       $(basename $0) reset
+usage: $(basename $0) <command> <github-fork>/<branch> <pullrequest#>
 
 GitHub pull request helper.
 
 Assumptions: upstream/master is the master branch of the upsteam
 repository
 
+Commands:
 
 pull:   Pulls forked branch into local branch of upstream/master, and 
         leaves it in a non-committed state for inspection and testing.
 
-commit: Commits merge with a GPG signed constructed commit message and
-        pushes to "upstream master".
+commit: Commits merge with a GPG signed constructed commit message.
+
+push:   Pushes to "upstream master" and cleans up temporary branch.
 
 reset:  Resets working copy to local master and deletes the temporary
         pull request branch.
@@ -46,6 +47,10 @@ EOF
 github-commit()
 {
     git commit -S -e -F $msgfile || return
+}
+
+github-push()
+{
     git push upstream HEAD:master && rm $msgfile
     git checkout master
     git branch -d ${source}-${branch}
@@ -69,7 +74,7 @@ preq=$3
 msgfile=.git/PULL_REQUEST_EDITMSG
 
 case "$1" in
-    pull|commit|reset)
+    pull|commit|push|reset)
         eval github-$1 ;;
     *)
         usage ;;
