@@ -66,8 +66,8 @@ github-reset()
 [ $# = 3 ] || usage
 
 topdir=$(git rev-parse --show-toplevel)
-origin_url=$(git remote get-url origin)
-project=$(basename $origin_url .git)
+upstream_url=$(git remote get-url upstream)
+project=$(basename $upstream_url .git)
 source=$(dirname $2)
 branch=$(basename $2)
 source_url=https://github.com/$source/$project
