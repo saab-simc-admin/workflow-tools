@@ -15,8 +15,8 @@ repository
 pull:   Pulls forked branch into local branch of upstream/master, and 
         leaves it in a non-committed state for inspection and testing.
 
-commit: Commits merge with a constructed commit message and pushes
-        to "upstream master".
+commit: Commits merge with a GPG signed constructed commit message and
+        pushes to "upstream master".
 
 reset:  Resets working copy to local master and deletes the temporary
         pull request branch.
