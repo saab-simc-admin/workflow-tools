@@ -30,7 +30,7 @@ github-pull()
 {
     local merge_base merge_head
 
-    git checkout -b ${source}:${branch} upstream/master || return
+    git checkout -b ${source}-${branch} upstream/master || return
     git pull --ff-only || return
     git pull --no-ff --verify-signatures --no-commit "$source_url" "$branch" || return
     merge_base=`cat .git/ORIG_HEAD`
@@ -48,7 +48,7 @@ github-commit()
     git commit -S -e -F $msgfile || return
     git push upstream HEAD:master && rm $msgfile
     git checkout master
-    git branch -d ${source}:${branch}
+    git branch -d ${source}-${branch}
 }
 
 github-reset()
