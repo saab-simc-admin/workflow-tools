@@ -1,0 +1,77 @@
+#! /bin/bash
+
+usage()
+{
+    cat <<EOF >&2
+usage: $(basename $0) {pull|commit} <github-fork>/<branch> <pullrequest#>
+       $(basename $0) reset
+
+GitHub pull request helper.
+
+Assumptions: upstream/master is the master branch of the upsteam
+repository
+
+
+pull:   Pulls forked branch into local branch of upstream/master, and 
+        leaves it in a non-committed state for inspection and testing.
+
+commit: Commits merge with a constructed commit message and pushes
+        to "upstream master".
+
+reset:  Resets working copy to local master and deletes the temporary
+        pull request branch.
+        
+WARNING: No github API validation of the PR is done.
+EOF
+    exit 1
+}
+
+github-pull()
+{
+    local merge_base merge_head
+
+    git checkout -b ${source}:${branch} upstream/master || return
+    git pull --ff-only || return
+    git pull --no-ff --verify-signatures --no-commit "$source_url" "$branch" || return
+    merge_base=`cat .git/ORIG_HEAD`
+    merge_head=`cat .git/MERGE_HEAD`
+
+    cat <<EOF >$msgfile
+Merge pull request #$preq from $source/$branch
+
+EOF
+    git log --pretty='* %h %s' $merge_base..$merge_head >>$msgfile
+}
+
+github-commit()
+{
+    git commit -S -e -F $msgfile || return
+    git push upstream HEAD:master && rm $msgfile
+    git checkout master
+    git branch -d ${source}:${branch}
+}
+
+github-reset()
+{
+    git reset --hard
+    git checkout master
+    git branch -D ${source}:${branch}
+}
+
+[ $# = 3 ] || usage
+
+origin_url=$(git remote get-url origin)
+project=$(basename $origin_url .git)
+source=$(dirname $2)
+branch=$(basename $2)
+source_url=https://github.com/$source/$project
+preq=$3
+msgfile=.git/PULL_REQUEST_EDITMSG
+
+case "$1" in
+    pull|commit|reset)
+        eval github-$1 ;;
+    *)
+        usage ;;
+esac
+
