@@ -60,7 +60,7 @@ github-reset()
 {
     git reset --hard
     git checkout master
-    git branch -D ${source}:${branch}
+    git branch -D ${source}-${branch}
 }
 
 [ $# = 3 ] || usage
