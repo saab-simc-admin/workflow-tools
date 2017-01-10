@@ -6,6 +6,13 @@
 # A server-side pre-receive git hook for checking the GPG signature
 # and other small workflow things of a pushed commit.
 #
+# Allowed signers
+# ---------------
+# Move collaborators.yaml to the .git/ directory of your repository
+# and write your usernames and GnuPG key fingerprints in it. The
+# format is a YAML hash from usernames to 40-character hexadecimal
+# fingerprint strings without spaces.
+#
 # Config
 # ------
 # hooks.allowunsignedcommits
@@ -36,13 +43,12 @@
 
 require 'rugged'
 require 'gpgme'
+require 'yaml'
 
 repo = Rugged::Repository.new('.')
 crypto = GPGME::Crypto.new
 
-@collaborators = {
-  'username' => '0123456789ABCDEF0123456789ABCDEF01234567',
-}
+@collaborators = YAML.load_file(repo.path + 'collaborators.yaml')
 
 def is_allowed_signer(keyid)
   keys = GPGME::Key.find(keyid)
