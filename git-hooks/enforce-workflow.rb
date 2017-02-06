@@ -82,7 +82,7 @@ end
 STDIN.each do |line|
   rev_old, rev_new, ref = line.split
 
-  if not repo.config['hooks.allowunsignedtags']
+  if not repo.config['hooks.allowcommitsonmaster']
     ## The only commits allowed on master are merges which have
     ## rev_old as a direct parent of rev_new.
     ##
@@ -210,7 +210,7 @@ STDIN.each do |line|
         end
       when :tag
         # The ref is an annotated tag
-        if rev_old.to_i(16) == 0 and not repo.config['hooks.allowunsignedtags']
+        if rev_old.to_i(16) == 0 and not repo.config['hooks.allowmodifytag']
           puts "*** Tag #{ref} already exists."
           puts "*** Modifying a tag is not allowed in this repository."
         else
