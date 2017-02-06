@@ -135,16 +135,12 @@ STDIN.each do |line|
     allowed = false
     signed = false
     signer = ''
-    begin
-      signature, plaintext = Rugged::Commit.extract_signature(repo, commit.oid)
-      crypto.verify(signature, :signed_text => plaintext) do |signature|
-        signed = signature.valid?
-        next if not signed
-        signer = signature.fingerprint
-        allowed = is_allowed_signer(signer)
-      end
-    rescue Exception => e
-      puts e
+    signature, plaintext = Rugged::Commit.extract_signature(repo, commit.oid)
+    crypto.verify(signature, :signed_text => plaintext) do |signature|
+      signed = signature.valid?
+      next if not signed
+      signer = signature.fingerprint
+      allowed = is_allowed_signer(signer)
     end
 
     case commit_type
