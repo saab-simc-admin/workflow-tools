@@ -51,7 +51,7 @@ crypto = GPGME::Crypto.new
 @collaborators = YAML.load_file(repo.path + 'collaborators.yaml')
 
 def is_allowed_signer(keyid)
-  keys = GPGME::Key.find(keyid)
+  keys = GPGME::Key.find(:public, keyid)
 
   if keys.length == 0
     puts "*** Key #{keyid} not in allowed list."
