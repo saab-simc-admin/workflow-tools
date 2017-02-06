@@ -121,8 +121,6 @@ STDIN.each do |line|
     # the number of commits manually.
     commit_count += 1
 
-    puts commit.oid
-
     if commit.oid.to_i(16) == 0
       # A commit with a hash full of zeros is a deletion of a ref.
       commit_type = :delete
