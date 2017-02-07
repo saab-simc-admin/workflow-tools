@@ -132,7 +132,7 @@ STDIN.each do |line|
   # rev_old is nothing, so this is the creation of a new ref.
   if rev_old.to_i(16) == 0
     # List everything reachable from rev_new but not any heads.
-    repo.references.each {|ref| walker.hide(ref.target.oid)}
+    repo.references.each("refs/heads/*") {|ref| walker.hide(ref.target.oid)}
   else
     # rev_old was already in the tree, so it must by definition be OK.
     walker.hide(rev_old)
