@@ -100,7 +100,7 @@ STDIN.each do |line|
     next
   end
 
-  if not repo.config['hooks.allowcommitsonmaster']
+  if not repo.config['hooks.allowcommitsonmaster'] == 'true'
     ## The only commits allowed on master are merges which have
     ## rev_old as a direct parent of rev_new.
     ##
@@ -161,12 +161,12 @@ STDIN.each do |line|
 
     case commit_type
     when :commit
-      if rev_old.to_i(16) == 0 and repo.config['hooks.denycreatebranch']
+      if rev_old.to_i(16) == 0 and repo.config['hooks.denycreatebranch'] == 'true'
         puts "*** Creating a branch is not allowed in this repository."
         exit 1
       end
 
-      if not repo.config['hooks.allowunsignedcommits']
+      if not repo.config['hooks.allowunsignedcommits'] == 'true'
         if not signed
           puts "*** Bad signature on commit #{commit.oid}."
           exit 1
@@ -180,7 +180,7 @@ STDIN.each do |line|
       end
 
     when :merge
-      if not repo.config['hooks.allowunsignedcommits']
+      if not repo.config['hooks.allowunsignedcommits'] == 'true'
         if not signed
           puts "*** Bad signature on merge #{commit.oid}."
           exit 1
@@ -207,19 +207,19 @@ STDIN.each do |line|
       case commit.type
       when :commit
         # The ref points to a commit, i.e. the ref is a lightweight tag.
-        if not repo.config['hooks.allowunsignedtags'] or
-            not repo.config['hooks.allowunannotated']
+        if not repo.config['hooks.allowunsignedtags'] == 'true' or
+            not repo.config['hooks.allowunannotated'] == 'true'
           puts "*** The un-annotated tag #{ref} is not allowed in this repository."
           puts "*** Use 'git tag [ -a | -s ]' for tags you want to propagate."
           exit 1
         end
       when :tag
         # The ref is an annotated tag
-        if rev_old.to_i(16) == 0 and not repo.config['hooks.allowmodifytag']
+        if rev_old.to_i(16) == 0 and not repo.config['hooks.allowmodifytag'] == 'true'
           puts "*** Tag #{ref} already exists."
           puts "*** Modifying a tag is not allowed in this repository."
         else
-          if not repo.config['hooks.allowunsignedtags']
+          if not repo.config['hooks.allowunsignedtags'] == 'true'
             if allowed
               puts "*** Good signature on tag #{ref} by #{signer}."
             else
