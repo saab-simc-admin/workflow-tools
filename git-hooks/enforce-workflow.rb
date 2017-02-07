@@ -82,6 +82,24 @@ end
 STDIN.each do |line|
   rev_old, rev_new, ref = line.split
 
+  # A hash full of zeroes is how Git represents "nothing".
+  if rev_new.to_i(16) == 0
+    # Deletion of a ref. This needs to be handled separately, since
+    # the walker can't handle a start ID of 0x0.
+    if ref =~ /^refs\/heads\// and not repo.config['hooks.allowdeletebranch'] == 'true'
+      puts "*** Deleting a branch is not allowed in this repository."
+      exit 1
+    elsif ref =~ /^refs\/remotes\// and not repo.config['hooks.allowdeletebranch'] == 'true'
+      puts "*** Deleting a remote tracking branch is not allowed in this repository."
+      exit 1
+    elsif ref =~ /^refs\/tags\// and not repo.config['hooks.allowdeletetag'] == 'true'
+      puts "*** Deleting a tag is not allowed in this repository."
+      exit 1
+    end
+    puts "*** Accepting deletion of ref #{ref}."
+    next
+  end
+
   if not repo.config['hooks.allowcommitsonmaster']
     ## The only commits allowed on master are merges which have
     ## rev_old as a direct parent of rev_new.
@@ -106,7 +124,7 @@ STDIN.each do |line|
   # Get all new commits on branch ref, even if it's a new branch.
   walker.push(rev_new)
 
-  # A hash full of zeroes is how Git represents "nothing".
+  # rev_old is nothing, so this is the creation of a new ref.
   if rev_old.to_i(16) == 0
     # List everything reachable from rev_new but not any heads.
     repo.references.each {|ref| walker.hide(ref.target.oid)}
@@ -122,8 +140,8 @@ STDIN.each do |line|
     commit_count += 1
 
     if commit.oid.to_i(16) == 0
-      # A commit with a hash full of zeros is a deletion of a ref.
-      commit_type = :delete
+      puts "*** Deletion of ref #{ref} in the middle of the commit graph? This can't happen; rejecting."
+      exit 1
     elsif commit.parent_ids.length >= 2
       commit_type = :merge
     else
@@ -175,17 +193,6 @@ STDIN.each do |line|
         end
       end
 
-    when :delete
-      if ref =~ /^refs\/heads\// and not repo.config['hooks.allowdeletebranch']
-        puts "*** Deleting a branch is not allowed in this repository."
-        exit 1
-      elsif ref =~ /^refs\/remotes\// and not repo.config['hooks.allowdeletebranch']
-        puts "*** Deleting a remote tracking branch is not allowed in this repository."
-        exit 1
-      elsif ref =~ /^refs\/tags\// and not repo.config['hooks.allowdeletetag']
-        puts "*** Deleting a tag is not allowed in this repository."
-        exit 1
-      end
     else
       puts "*** Unknown type of update to ref #{ref} of type #{commit_type}."
     end
