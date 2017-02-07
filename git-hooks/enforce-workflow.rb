@@ -50,10 +50,10 @@ crypto = GPGME::Crypto.new
 
 @collaborators = YAML.load_file(repo.path + 'collaborators.yaml')
 
-def is_allowed_signer(keyid)
+def allowed_signer?(keyid)
   keys = GPGME::Key.find(:public, keyid)
 
-  if keys.length == 0
+  if keys.length.zero?
     puts "*** Key #{keyid} not in allowed list."
     return false
   end
@@ -63,7 +63,7 @@ def is_allowed_signer(keyid)
     return false
   end
 
-  return !!@collaborators.key(keys[0].fingerprint)
+  !!@collaborators.key(keys[0].fingerprint)
 end
 
 # Calling convention, from githooks(5):
@@ -83,41 +83,41 @@ STDIN.each do |line|
   rev_old, rev_new, ref = line.split
 
   # A hash full of zeroes is how Git represents "nothing".
-  if rev_new.to_i(16) == 0
+  if rev_new.to_i(16).zero?
     # Deletion of a ref. This needs to be handled separately, since
     # the walker can't handle a start ID of 0x0.
-    if ref =~ /^refs\/heads\// and not repo.config['hooks.allowdeletebranch'] == 'true'
-      puts "*** Deleting a branch is not allowed in this repository."
+    if ref =~ %r{^refs\/heads\/} && (repo.config['hooks.allowdeletebranch'] != 'true')
+      puts '*** Deleting a branch is not allowed in this repository.'
       exit 1
-    elsif ref =~ /^refs\/remotes\// and not repo.config['hooks.allowdeletebranch'] == 'true'
-      puts "*** Deleting a remote tracking branch is not allowed in this repository."
+    elsif ref =~ %r{^refs\/remotes\/} && (repo.config['hooks.allowdeletebranch'] != 'true')
+      puts '*** Deleting a remote tracking branch is not allowed in this repository.'
       exit 1
-    elsif ref =~ /^refs\/tags\// and not repo.config['hooks.allowdeletetag'] == 'true'
-      puts "*** Deleting a tag is not allowed in this repository."
+    elsif ref =~ %r{^refs\/tags\/} && (repo.config['hooks.allowdeletetag'] != 'true')
+      puts '*** Deleting a tag is not allowed in this repository.'
       exit 1
     end
     puts "*** Accepting deletion of ref #{ref}."
     next
   end
 
-  if not repo.config['hooks.allowcommitsonmaster'] == 'true'
+  if repo.config['hooks.allowcommitsonmaster'] != 'true'
     ## The only commits allowed on master are merges which have
     ## rev_old as a direct parent of rev_new.
     ##
     ## We have to check this in a separate step, since we won't have
     ## enough context while walking through the commit list to do this
     ## check properly.
-    if ref == "refs/heads/master"
-      if rev_old.to_i(16) == 0
+    if ref == 'refs/heads/master'
+      if rev_old.to_i(16).zero?
         # Initial creation of master. Let this update through.
         puts "*** Accepting creation of #{ref}."
       else
         # We only want merges on master. A merge is a commit with at
         # least two parents, and one of them has to be the old target.
         parents = repo.lookup(rev_new).parent_ids
-        if parents.length < 2 or
-            not parents.include?(rev_old)
-          puts "*** Master only accepts merges of feature branches."
+        if parents.length < 2 ||
+           !parents.include?(rev_old)
+          puts '*** Master only accepts merges of feature branches.'
           exit 1
         end
       end
@@ -130,9 +130,9 @@ STDIN.each do |line|
   walker.push(rev_new)
 
   # rev_old is nothing, so this is the creation of a new ref.
-  if rev_old.to_i(16) == 0
+  if rev_old.to_i(16).zero?
     # List everything reachable from rev_new but not any heads.
-    repo.references.each("refs/heads/*") {|ref| walker.hide(ref.target.oid)}
+    repo.references.each('refs/heads/*') { |ref| walker.hide(ref.target.oid) }
   else
     # rev_old was already in the tree, so it must by definition be OK.
     walker.hide(rev_old)
@@ -144,7 +144,7 @@ STDIN.each do |line|
     # the number of commits manually.
     commit_count += 1
 
-    if commit.oid.to_i(16) == 0
+    if commit.oid.to_i(16).zero?
       puts "*** Deletion of ref #{ref} in the middle of the commit graph? This can't happen; rejecting."
       exit 1
     elsif commit.parent_ids.length >= 2
@@ -157,22 +157,22 @@ STDIN.each do |line|
     signed = false
     signer = ''
     signature, plaintext = Rugged::Commit.extract_signature(repo, commit.oid)
-    crypto.verify(signature, :signed_text => plaintext) do |signature|
+    crypto.verify(signature, signed_text: plaintext) do |signature|
       signed = signature.valid?
-      next if not signed
+      next unless signed
       signer = signature.fingerprint
-      allowed = is_allowed_signer(signer)
+      allowed = allowed_signer?(signer)
     end
 
     case commit_type
     when :commit
-      if rev_old.to_i(16) == 0 and repo.config['hooks.denycreatebranch'] == 'true'
-        puts "*** Creating a branch is not allowed in this repository."
+      if rev_old.to_i(16).zero? && (repo.config['hooks.denycreatebranch'] == 'true')
+        puts '*** Creating a branch is not allowed in this repository.'
         exit 1
       end
 
-      if not repo.config['hooks.allowunsignedcommits'] == 'true'
-        if not signed
+      if repo.config['hooks.allowunsignedcommits'] != 'true'
+        if !signed
           puts "*** Bad signature on commit #{commit.oid}."
           exit 1
         elsif allowed
@@ -185,8 +185,8 @@ STDIN.each do |line|
       end
 
     when :merge
-      if not repo.config['hooks.allowunsignedcommits'] == 'true'
-        if not signed
+      if repo.config['hooks.allowunsignedcommits'] != 'true'
+        if !signed
           puts "*** Bad signature on merge #{commit.oid}."
           exit 1
         elsif allowed
@@ -203,7 +203,7 @@ STDIN.each do |line|
     end
   end
 
-  if commit_count == 0
+  if commit_count.zero?
     # rev_new pointed to something considered by the walker to already
     # be in the commit graph, which could be a commit (if we're adding
     # a lightweight tag) or a tag object (if we're adding an annotated
@@ -213,25 +213,23 @@ STDIN.each do |line|
     case commit.type
     when :commit
       # The ref points to a commit, i.e. the ref is a lightweight tag.
-      if not repo.config['hooks.allowunsignedtags'] == 'true' or
-          not repo.config['hooks.allowunannotated'] == 'true'
+      if (repo.config['hooks.allowunsignedtags'] != 'true') ||
+         (repo.config['hooks.allowunannotated'] != 'true')
         puts "*** The un-annotated tag #{ref} is not allowed in this repository."
         puts "*** Use 'git tag [ -a | -s ]' for tags you want to propagate."
         exit 1
       end
     when :tag
       # The ref is an annotated tag
-      if rev_old.to_i(16) == 0 and not repo.config['hooks.allowmodifytag'] == 'true'
+      if rev_old.to_i(16).zero? && (repo.config['hooks.allowmodifytag'] != 'true')
         puts "*** Tag #{ref} already exists."
-        puts "*** Modifying a tag is not allowed in this repository."
-      else
-        if not repo.config['hooks.allowunsignedtags'] == 'true'
-          if allowed
-            puts "*** Good signature on tag #{ref} by #{signer}."
-          else
-            puts "*** Rejecting tag #{ref} due to lack of a valid GPG signature."
-            exit 1
-          end
+        puts '*** Modifying a tag is not allowed in this repository.'
+      elsif repo.config['hooks.allowunsignedtags'] != 'true'
+        if allowed
+          puts "*** Good signature on tag #{ref} by #{signer}."
+        else
+          puts "*** Rejecting tag #{ref} due to lack of a valid GPG signature."
+          exit 1
         end
       end
     else
