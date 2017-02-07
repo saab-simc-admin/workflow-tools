@@ -108,13 +108,18 @@ STDIN.each do |line|
     ## enough context while walking through the commit list to do this
     ## check properly.
     if ref == "refs/heads/master"
-      # We only want merges on master. A merge is a commit with at
-      # least two parents, and one of them has to be the old target.
-      parents = repo.lookup(rev_new).parent_ids
-      if parents.length < 2 or
-          not parents.include?(rev_old)
-        puts "*** Master only accepts merges of feature branches."
-        exit 1
+      if rev_old.to_i(16) == 0
+        # Initial creation of master. Let this update through.
+        puts "*** Accepting creation of #{ref}."
+      else
+        # We only want merges on master. A merge is a commit with at
+        # least two parents, and one of them has to be the old target.
+        parents = repo.lookup(rev_new).parent_ids
+        if parents.length < 2 or
+            not parents.include?(rev_old)
+          puts "*** Master only accepts merges of feature branches."
+          exit 1
+        end
       end
     end
   end
