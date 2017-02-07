@@ -196,42 +196,42 @@ STDIN.each do |line|
     else
       puts "*** Unknown type of update to ref #{ref} of type #{commit_type}."
     end
+  end
 
-    if commit_count == 0
-      # rev_new pointed to something considered by the walker to already
-      # be in the commit graph, which could be a commit (if we're adding
-      # a lightweight tag) or a tag object (if we're adding an annotated
-      # tag), since the walker doesn't consider the tag object to be
-      # separate from the commit it points to.
-      commit = repo.lookup(rev_new)
-      case commit.type
-      when :commit
-        # The ref points to a commit, i.e. the ref is a lightweight tag.
-        if not repo.config['hooks.allowunsignedtags'] == 'true' or
-            not repo.config['hooks.allowunannotated'] == 'true'
-          puts "*** The un-annotated tag #{ref} is not allowed in this repository."
-          puts "*** Use 'git tag [ -a | -s ]' for tags you want to propagate."
-          exit 1
-        end
-      when :tag
-        # The ref is an annotated tag
-        if rev_old.to_i(16) == 0 and not repo.config['hooks.allowmodifytag'] == 'true'
-          puts "*** Tag #{ref} already exists."
-          puts "*** Modifying a tag is not allowed in this repository."
-        else
-          if not repo.config['hooks.allowunsignedtags'] == 'true'
-            if allowed
-              puts "*** Good signature on tag #{ref} by #{signer}."
-            else
-              puts "*** Rejecting tag #{ref} due to lack of a valid GPG signature."
-              exit 1
-            end
-          end
-        end
-      else
-        puts "*** No new commits, but the pushed ref #{ref} is a \"#{commit.type}\" instead of a tag? I'm confused."
+  if commit_count == 0
+    # rev_new pointed to something considered by the walker to already
+    # be in the commit graph, which could be a commit (if we're adding
+    # a lightweight tag) or a tag object (if we're adding an annotated
+    # tag), since the walker doesn't consider the tag object to be
+    # separate from the commit it points to.
+    commit = repo.lookup(rev_new)
+    case commit.type
+    when :commit
+      # The ref points to a commit, i.e. the ref is a lightweight tag.
+      if not repo.config['hooks.allowunsignedtags'] == 'true' or
+          not repo.config['hooks.allowunannotated'] == 'true'
+        puts "*** The un-annotated tag #{ref} is not allowed in this repository."
+        puts "*** Use 'git tag [ -a | -s ]' for tags you want to propagate."
         exit 1
       end
+    when :tag
+      # The ref is an annotated tag
+      if rev_old.to_i(16) == 0 and not repo.config['hooks.allowmodifytag'] == 'true'
+        puts "*** Tag #{ref} already exists."
+        puts "*** Modifying a tag is not allowed in this repository."
+      else
+        if not repo.config['hooks.allowunsignedtags'] == 'true'
+          if allowed
+            puts "*** Good signature on tag #{ref} by #{signer}."
+          else
+            puts "*** Rejecting tag #{ref} due to lack of a valid GPG signature."
+            exit 1
+          end
+        end
+      end
+    else
+      puts "*** No new commits, but the pushed ref #{ref} is a \"#{commit.type}\" instead of a tag? I'm confused."
+      exit 1
     end
   end
 end
