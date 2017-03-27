@@ -179,7 +179,7 @@ STDIN.each do |line|
           puts "*** Good signature on commit #{commit.oid} by #{signer}."
         else
           # Signed, but not allowed
-          puts "*** Commit #{commit.oid} signed by unauthrosed signer #{signer}."
+          puts "*** Commit #{commit.oid} signed by unauthorised signer #{signer}."
           exit 1
         end
       end
