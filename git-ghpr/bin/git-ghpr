@@ -3,7 +3,7 @@
 usage()
 {
     cat <<EOF >&2
-usage: $(basename $0) <command> <github-fork>/<branch> <pullrequest#>
+usage: $(basename $0) <command> <github-fork>:<branch> <pullrequest#>
 
 GitHub pull request helper.
 
@@ -12,7 +12,7 @@ repository
 
 Commands:
 
-pull:   Pulls forked branch into local branch of upstream/master, and 
+pull:   Pulls forked branch into local branch of upstream/master, and
         leaves it in a non-committed state for inspection and testing.
 
 commit: Commits merge with a GPG signed constructed commit message.
@@ -21,7 +21,7 @@ push:   Pushes to "upstream master" and cleans up temporary branch.
 
 reset:  Resets working copy to local master and deletes the temporary
         pull request branch.
-        
+
 WARNING: No github API validation of the PR is done.
 EOF
     exit 1
@@ -68,8 +68,9 @@ github-reset()
 topdir=$(git rev-parse --show-toplevel)
 upstream_url=$(git remote get-url upstream)
 project=$(basename $upstream_url .git)
-source=$(dirname $2)
-branch=$(basename $2)
+source=$(<<< "$2" cut -d: -f1 --only-delimited)
+branch=$(<<< "$2" cut -d: -f2 --only-delimited)
+[ -z "$source" -o -z "$branch" ] && usage
 source_url=https://github.com/$source/$project
 preq=$3
 msgfile="$topdir/.git/PULL_REQUEST_EDITMSG"
@@ -80,4 +81,3 @@ case "$1" in
     *)
         usage ;;
 esac
-
