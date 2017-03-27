@@ -3,7 +3,7 @@
 usage()
 {
     cat <<EOF >&2
-usage: $(basename $0) <command> <github-fork>/<branch> <pullrequest#>
+usage: $(basename $0) <command> <github-fork>:<branch> <pullrequest#>
 
 GitHub pull request helper.
 
@@ -68,8 +68,9 @@ github-reset()
 topdir=$(git rev-parse --show-toplevel)
 upstream_url=$(git remote get-url upstream)
 project=$(basename $upstream_url .git)
-source=$(dirname $2)
-branch=$(basename $2)
+source=$(<<< "$2" cut -d: -f1 --only-delimited)
+branch=$(<<< "$2" cut -d: -f2 --only-delimited)
+[ -z "$source" -o -z "$branch" ] && usage
 source_url=https://github.com/$source/$project
 preq=$3
 msgfile="$topdir/.git/PULL_REQUEST_EDITMSG"
