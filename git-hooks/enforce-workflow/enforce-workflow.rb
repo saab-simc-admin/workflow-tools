@@ -50,7 +50,7 @@ crypto = GPGME::Crypto.new
 
 @collaborators = YAML.load_file(repo.path + 'collaborators.yaml')
 
-def allowed_signer?(keyid)
+def find_signer(keyid)
   keys = GPGME::Key.find(:public, keyid)
 
   if keys.length.zero?
@@ -63,7 +63,7 @@ def allowed_signer?(keyid)
     return false
   end
 
-  !!@collaborators.key(keys[0].fingerprint)
+  @collaborators.key(keys[0].fingerprint)
 end
 
 # Calling convention, from githooks(5):
@@ -155,13 +155,14 @@ STDIN.each do |line|
 
     allowed = false
     signed = false
-    signer = ''
+    fingerprint = nil
+    signer = nil
     signature, plaintext = Rugged::Commit.extract_signature(repo, commit.oid)
     crypto.verify(signature, signed_text: plaintext) do |signature|
       signed = signature.valid?
       next unless signed
-      signer = signature.fingerprint
-      allowed = allowed_signer?(signer)
+      fingerprint = signature.fingerprint
+      signer = find_signer(fingerprint)
     end
 
     case commit_type
@@ -175,11 +176,11 @@ STDIN.each do |line|
         if !signed
           puts "*** Bad signature on commit #{commit.oid}."
           exit 1
-        elsif allowed
-          puts "*** Good signature on commit #{commit.oid} by #{signer}."
+        elsif signer
+          puts "*** Good signature on commit #{commit.oid} by #{signer} (#{fingerprint})."
         else
           # Signed, but not allowed
-          puts "*** Commit #{commit.oid} signed by unauthorised signer #{signer}."
+          puts "*** Commit #{commit.oid} signed by unauthorised key #{fingerprint}."
           exit 1
         end
       end
@@ -189,11 +190,11 @@ STDIN.each do |line|
         if !signed
           puts "*** Bad signature on merge #{commit.oid}."
           exit 1
-        elsif allowed
-          puts "*** Good signature on merge #{commit.oid} by #{signer}."
+        elsif signer
+          puts "*** Good signature on merge #{commit.oid} by #{signer} (#{fingerprint})."
         else
           # Signed, but not allowed
-          puts "*** Merge #{commit.oid} signed by unauthorised signer #{signer}."
+          puts "*** Merge #{commit.oid} signed by unauthorised key #{fingerprint}."
           exit 1
         end
       end
@@ -226,7 +227,7 @@ STDIN.each do |line|
         puts '*** Modifying a tag is not allowed in this repository.'
       elsif repo.config['hooks.allowunsignedtags'] != 'true'
         if allowed
-          puts "*** Good signature on tag #{ref} by #{signer}."
+          puts "*** Good signature on tag #{ref} by #{signer} (#{fingerprint})."
         else
           puts "*** Rejecting tag #{ref} due to lack of a valid GPG signature."
           exit 1
