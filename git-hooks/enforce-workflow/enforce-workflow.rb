@@ -45,10 +45,10 @@ require 'rugged'
 require 'gpgme'
 require 'yaml'
 
-repo = Rugged::Repository.new('.')
+REPO = Rugged::Repository.new('.')
 crypto = GPGME::Crypto.new
 
-@collaborators = YAML.load_file(repo.path + 'collaborators.yaml')
+@collaborators = YAML.load_file(REPO.path + 'collaborators.yaml')
 
 def find_signer(keyid)
   keys = GPGME::Key.find(:public, keyid)
@@ -64,6 +64,23 @@ def find_signer(keyid)
   end
 
   @collaborators.key(keys[0].fingerprint)
+end
+
+# Check if the repository configuration accepts deleting the reference
+# +ref+.
+def accept_deletion?(ref)
+  result = false
+  if ref =~ %r{^refs\/heads\/} && (REPO.config['hooks.allowdeletebranch'] != 'true')
+    puts '*** Deleting a branch is not allowed in this repository.'
+  elsif ref =~ %r{^refs\/remotes\/} && (REPO.config['hooks.allowdeletebranch'] != 'true')
+    puts '*** Deleting a remote tracking branch is not allowed in this repository.'
+  elsif ref =~ %r{^refs\/tags\/} && (REPO.config['hooks.allowdeletetag'] != 'true')
+    puts '*** Deleting a tag is not allowed in this repository.'
+  else
+    puts "*** Accepting deletion of ref #{ref}."
+    result = true
+  end
+  return result
 end
 
 # Calling convention, from githooks(5):
@@ -86,21 +103,11 @@ STDIN.each do |line|
   if rev_new.to_i(16).zero?
     # Deletion of a ref. This needs to be handled separately, since
     # the walker can't handle a start ID of 0x0.
-    if ref =~ %r{^refs\/heads\/} && (repo.config['hooks.allowdeletebranch'] != 'true')
-      puts '*** Deleting a branch is not allowed in this repository.'
-      exit 1
-    elsif ref =~ %r{^refs\/remotes\/} && (repo.config['hooks.allowdeletebranch'] != 'true')
-      puts '*** Deleting a remote tracking branch is not allowed in this repository.'
-      exit 1
-    elsif ref =~ %r{^refs\/tags\/} && (repo.config['hooks.allowdeletetag'] != 'true')
-      puts '*** Deleting a tag is not allowed in this repository.'
-      exit 1
-    end
-    puts "*** Accepting deletion of ref #{ref}."
-    next
+    next if accept_deletion?(ref)
+    exit 1
   end
 
-  if repo.config['hooks.allowcommitsonmaster'] != 'true'
+  if REPO.config['hooks.allowcommitsonmaster'] != 'true'
     ## The only commits allowed on master are merges which have
     ## rev_old as a direct parent of rev_new.
     ##
@@ -114,7 +121,7 @@ STDIN.each do |line|
       else
         # We only want merges on master. A merge is a commit with at
         # least two parents, and one of them has to be the old target.
-        parents = repo.lookup(rev_new).parent_ids
+        parents = REPO.lookup(rev_new).parent_ids
         if parents.length < 2 ||
            !parents.include?(rev_old)
           puts '*** Master only accepts merges of feature branches.'
@@ -124,7 +131,7 @@ STDIN.each do |line|
     end
   end
 
-  walker = Rugged::Walker.new(repo)
+  walker = Rugged::Walker.new(REPO)
 
   # Get all new commits on branch ref, even if it's a new branch.
   walker.push(rev_new)
@@ -132,7 +139,7 @@ STDIN.each do |line|
   # rev_old is nothing, so this is the creation of a new ref.
   if rev_old.to_i(16).zero?
     # List everything reachable from rev_new but not any heads.
-    repo.references.each('refs/heads/*') { |ref| walker.hide(ref.target.oid) }
+    REPO.references.each('refs/heads/*') { |ref| walker.hide(ref.target.oid) }
   else
     # rev_old was already in the tree, so it must by definition be OK.
     walker.hide(rev_old)
@@ -157,7 +164,7 @@ STDIN.each do |line|
     signed = false
     fingerprint = nil
     signer = nil
-    signature, plaintext = Rugged::Commit.extract_signature(repo, commit.oid)
+    signature, plaintext = Rugged::Commit.extract_signature(REPO, commit.oid)
     crypto.verify(signature, signed_text: plaintext) do |signature|
       signed = signature.valid?
       next unless signed
@@ -167,12 +174,12 @@ STDIN.each do |line|
 
     case commit_type
     when :commit
-      if rev_old.to_i(16).zero? && (repo.config['hooks.denycreatebranch'] == 'true')
+      if rev_old.to_i(16).zero? && (REPO.config['hooks.denycreatebranch'] == 'true')
         puts '*** Creating a branch is not allowed in this repository.'
         exit 1
       end
 
-      if repo.config['hooks.allowunsignedcommits'] != 'true'
+      if REPO.config['hooks.allowunsignedcommits'] != 'true'
         if !signed
           puts "*** Bad signature on commit #{commit.oid}."
           exit 1
@@ -186,7 +193,7 @@ STDIN.each do |line|
       end
 
     when :merge
-      if repo.config['hooks.allowunsignedcommits'] != 'true'
+      if REPO.config['hooks.allowunsignedcommits'] != 'true'
         if !signed
           puts "*** Bad signature on merge #{commit.oid}."
           exit 1
@@ -210,22 +217,22 @@ STDIN.each do |line|
     # a lightweight tag) or a tag object (if we're adding an annotated
     # tag), since the walker doesn't consider the tag object to be
     # separate from the commit it points to.
-    commit = repo.lookup(rev_new)
+    commit = REPO.lookup(rev_new)
     case commit.type
     when :commit
       # The ref points to a commit, i.e. the ref is a lightweight tag.
-      if (repo.config['hooks.allowunsignedtags'] != 'true') ||
-         (repo.config['hooks.allowunannotated'] != 'true')
+      if (REPO.config['hooks.allowunsignedtags'] != 'true') ||
+         (REPO.config['hooks.allowunannotated'] != 'true')
         puts "*** The un-annotated tag #{ref} is not allowed in this repository."
         puts "*** Use 'git tag [ -a | -s ]' for tags you want to propagate."
         exit 1
       end
     when :tag
       # The ref is an annotated tag
-      if rev_old.to_i(16).zero? && (repo.config['hooks.allowmodifytag'] != 'true')
+      if rev_old.to_i(16).zero? && (REPO.config['hooks.allowmodifytag'] != 'true')
         puts "*** Tag #{ref} already exists."
         puts '*** Modifying a tag is not allowed in this repository.'
-      elsif repo.config['hooks.allowunsignedtags'] != 'true'
+      elsif REPO.config['hooks.allowunsignedtags'] != 'true'
         if allowed
           puts "*** Good signature on tag #{ref} by #{signer} (#{fingerprint})."
         else
