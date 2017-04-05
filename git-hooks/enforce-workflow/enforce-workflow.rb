@@ -95,7 +95,7 @@ def accept_update_of_master?(old, new)
     # master.
     if old.to_i(16).zero?
       # Initial creation of master. Let this update through.
-      puts "*** Accepting creation of master branch."
+      puts '*** Accepting creation of master branch.'
     else
       # We only want merges on master. A merge is a commit with at
       # least two parents, and one of them has to be the old target.
