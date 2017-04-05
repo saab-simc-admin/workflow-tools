@@ -269,8 +269,8 @@ STDIN.each do |line|
   if rev_new.to_i(16).zero?
     # Deletion of a ref. This needs to be handled separately, since
     # the walker can't handle a start ID of 0x0.
-    next if accept_deletion?(ref)
-    exit 1
+    exit 1 unless accept_deletion?(ref)
+    next
   end
 
   # Normally, the only commits allowed on master are merges which have
