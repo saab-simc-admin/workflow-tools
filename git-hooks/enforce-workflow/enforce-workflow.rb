@@ -83,6 +83,34 @@ def accept_deletion?(ref)
   return result
 end
 
+# Check if the repository configuration accepts updating master from
+# +old+ to +new+.
+def accept_update_of_master?(old, new)
+  result = false
+  if REPO.config['hooks.allowcommitsonmaster'] == 'true'
+    result = true
+  else
+    # The only commits allowed on master are merges which have rev_old
+    # as a direct parent of rev_new, or the initial commit creating
+    # master.
+    if old.to_i(16).zero?
+      # Initial creation of master. Let this update through.
+      puts "*** Accepting creation of master branch."
+    else
+      # We only want merges on master. A merge is a commit with at
+      # least two parents, and one of them has to be the old target.
+      parents = REPO.lookup(new).parent_ids
+      if parents.length >= 2 &&
+         parents.include?(old)
+        result = true
+      else
+        puts '*** Master only accepts merges of feature branches.'
+      end
+    end
+  end
+  return result
+end
+
 # Calling convention, from githooks(5):
 #
 # This hook executes once for the receive operation. It takes no
@@ -107,28 +135,14 @@ STDIN.each do |line|
     exit 1
   end
 
-  if REPO.config['hooks.allowcommitsonmaster'] != 'true'
-    ## The only commits allowed on master are merges which have
-    ## rev_old as a direct parent of rev_new.
-    ##
-    ## We have to check this in a separate step, since we won't have
-    ## enough context while walking through the commit list to do this
-    ## check properly.
-    if ref == 'refs/heads/master'
-      if rev_old.to_i(16).zero?
-        # Initial creation of master. Let this update through.
-        puts "*** Accepting creation of #{ref}."
-      else
-        # We only want merges on master. A merge is a commit with at
-        # least two parents, and one of them has to be the old target.
-        parents = REPO.lookup(rev_new).parent_ids
-        if parents.length < 2 ||
-           !parents.include?(rev_old)
-          puts '*** Master only accepts merges of feature branches.'
-          exit 1
-        end
-      end
-    end
+  # Normally, the only commits allowed on master are merges which have
+  # rev_old as a direct parent of rev_new.
+  #
+  # We have to check this in a separate step, since we won't have
+  # enough context while walking through the commit list to do this
+  # check properly.
+  if ref == 'refs/heads/master'
+    exit 1 unless accept_update_of_master?(rev_old, rev_new)
   end
 
   walker = Rugged::Walker.new(REPO)
