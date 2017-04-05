@@ -46,7 +46,7 @@ require 'gpgme'
 require 'yaml'
 
 REPO = Rugged::Repository.new('.')
-crypto = GPGME::Crypto.new
+CRYPTO = GPGME::Crypto.new
 
 @collaborators = YAML.load_file(REPO.path + 'collaborators.yaml')
 
@@ -111,6 +111,144 @@ def accept_update_of_master?(old, new)
   return result
 end
 
+# Walk the commit graph between +old+ and +new+, checking signatures
+# on each commit object encountered.
+#
+# Returns [bool, int]. The boolean is true if all commits are properly
+# signed, false otherwise. If the boolean is true, the integer says
+# how many objects were encountered in the graph. If the boolean is
+# false, the value of the integer is undefined.
+def walk_graph(old, new, ref)
+  walker = Rugged::Walker.new(REPO)
+
+  # Get all new commits on branch ref, even if it's a new branch.
+  walker.push(new)
+
+  # old is nothing, so this is the creation of a new ref.
+  if old.to_i(16).zero?
+    # List everything reachable from new but not any heads.
+    REPO.references.each('refs/heads/*') { |ref| walker.hide(ref.target.oid) }
+  else
+    # old was already in the tree, so it must by definition be OK.
+    walker.hide(old)
+  end
+
+  commit_count = 0
+  update_allowed = true
+  walker.each do |commit|
+    # walker.count would have consumed the walker, so instead track
+    # the number of commits manually.
+    commit_count += 1
+
+    if commit.oid.to_i(16).zero?
+      puts "*** Deletion of ref #{ref} in the middle of the commit graph? This can't happen; rejecting."
+      update_allowed = false
+    elsif commit.parent_ids.length >= 2
+      commit_type = :merge
+    else
+      commit_type = commit.type
+    end
+
+    signed = false
+    fingerprint = nil
+    signer = nil
+    signature, plaintext = Rugged::Commit.extract_signature(REPO, commit.oid)
+    CRYPTO.verify(signature, signed_text: plaintext) do |signature|
+      signed = signature.valid?
+      next unless signed
+      fingerprint = signature.fingerprint
+      signer = find_signer(fingerprint)
+    end
+
+    case commit_type
+    when :commit
+      if old.to_i(16).zero? && (REPO.config['hooks.denycreatebranch'] == 'true')
+        puts '*** Creating a branch is not allowed in this repository.'
+        update_allowed = false
+        break
+      end
+
+      if REPO.config['hooks.allowunsignedcommits'] != 'true'
+        if !signed
+          puts "*** Bad signature on commit #{commit.oid}."
+          update_allowed = false
+          break
+        elsif signer
+          puts "*** Good signature on commit #{commit.oid} by #{signer} (#{fingerprint})."
+        else
+          # Signed, but not allowed
+          puts "*** Commit #{commit.oid} signed by unauthorised key #{fingerprint}."
+          update_allowed = false
+          break
+        end
+      end
+
+    when :merge
+      if REPO.config['hooks.allowunsignedcommits'] != 'true'
+        if !signed
+          puts "*** Bad signature on merge #{commit.oid}."
+          update_allowed = false
+          break
+        elsif signer
+          puts "*** Good signature on merge #{commit.oid} by #{signer} (#{fingerprint})."
+        else
+          # Signed, but not allowed
+          puts "*** Merge #{commit.oid} signed by unauthorised key #{fingerprint}."
+          update_allowed = false
+          break
+        end
+      end
+
+    else
+      puts "*** Unknown type of update to ref #{ref} of type #{commit_type}."
+      update_allowed = false
+      break
+    end
+  end
+
+  return [update_allowed, commit_count]
+end
+
+# Check if the lightweight tag +ref+ should be allowed to be created.
+def allow_lightweight_tag?(ref)
+  if (REPO.config['hooks.allowunsignedtags'] != 'true') ||
+     (REPO.config['hooks.allowunannotated'] != 'true')
+    puts "*** The un-annotated tag #{ref} is not allowed in this repository."
+    puts "*** Use 'git tag [ -a | -s ]' for tags you want to propagate."
+    return false
+  end
+  return true
+end
+
+# Check if the annotated tag +ref+, currently pointing to commit ID
+# +commit+, should be allowed to be created or updated.
+def allow_annotated_tag?(old, ref)
+  if old.to_i(16).zero? && (REPO.config['hooks.allowmodifytag'] != 'true')
+    puts "*** Tag #{ref} already exists."
+    puts '*** Modifying a tag is not allowed in this repository.'
+    return false
+  elsif REPO.config['hooks.allowunsignedtags'] != 'true'
+    signature, plaintext = Rugged::Commit.extract_signature(REPO, commit.oid)
+    CRYPTO.verify(signature, signed_text: plaintext) do |signature|
+      signed = signature.valid?
+      if signed
+        fingerprint = signature.fingerprint
+        signer = find_signer(fingerprint)
+      end
+    end
+    if !signed
+      puts "*** Bad signature on tag #{ref}."
+      return false
+    elsif signer
+      puts "*** Good signature on tag #{ref} by #{signer} (#{fingerprint})."
+      return true
+    else
+      puts "*** Rejecting tag #{ref} due to lack of a valid GPG signature."
+      return false
+    end
+  end
+end
+
 # Calling convention, from githooks(5):
 #
 # This hook executes once for the receive operation. It takes no
@@ -145,85 +283,9 @@ STDIN.each do |line|
     exit 1 unless accept_update_of_master?(rev_old, rev_new)
   end
 
-  walker = Rugged::Walker.new(REPO)
-
-  # Get all new commits on branch ref, even if it's a new branch.
-  walker.push(rev_new)
-
-  # rev_old is nothing, so this is the creation of a new ref.
-  if rev_old.to_i(16).zero?
-    # List everything reachable from rev_new but not any heads.
-    REPO.references.each('refs/heads/*') { |ref| walker.hide(ref.target.oid) }
-  else
-    # rev_old was already in the tree, so it must by definition be OK.
-    walker.hide(rev_old)
-  end
-
-  commit_count = 0
-  walker.each do |commit|
-    # walker.count would have consumed the walker, so instead track
-    # the number of commits manually.
-    commit_count += 1
-
-    if commit.oid.to_i(16).zero?
-      puts "*** Deletion of ref #{ref} in the middle of the commit graph? This can't happen; rejecting."
-      exit 1
-    elsif commit.parent_ids.length >= 2
-      commit_type = :merge
-    else
-      commit_type = commit.type
-    end
-
-    allowed = false
-    signed = false
-    fingerprint = nil
-    signer = nil
-    signature, plaintext = Rugged::Commit.extract_signature(REPO, commit.oid)
-    crypto.verify(signature, signed_text: plaintext) do |signature|
-      signed = signature.valid?
-      next unless signed
-      fingerprint = signature.fingerprint
-      signer = find_signer(fingerprint)
-    end
-
-    case commit_type
-    when :commit
-      if rev_old.to_i(16).zero? && (REPO.config['hooks.denycreatebranch'] == 'true')
-        puts '*** Creating a branch is not allowed in this repository.'
-        exit 1
-      end
-
-      if REPO.config['hooks.allowunsignedcommits'] != 'true'
-        if !signed
-          puts "*** Bad signature on commit #{commit.oid}."
-          exit 1
-        elsif signer
-          puts "*** Good signature on commit #{commit.oid} by #{signer} (#{fingerprint})."
-        else
-          # Signed, but not allowed
-          puts "*** Commit #{commit.oid} signed by unauthorised key #{fingerprint}."
-          exit 1
-        end
-      end
-
-    when :merge
-      if REPO.config['hooks.allowunsignedcommits'] != 'true'
-        if !signed
-          puts "*** Bad signature on merge #{commit.oid}."
-          exit 1
-        elsif signer
-          puts "*** Good signature on merge #{commit.oid} by #{signer} (#{fingerprint})."
-        else
-          # Signed, but not allowed
-          puts "*** Merge #{commit.oid} signed by unauthorised key #{fingerprint}."
-          exit 1
-        end
-      end
-
-    else
-      puts "*** Unknown type of update to ref #{ref} of type #{commit_type}."
-    end
-  end
+  # Check commit signatures.
+  update_allowed, commit_count = walk_graph(rev_old, rev_new, ref)
+  exit 1 unless update_allowed
 
   if commit_count.zero?
     # rev_new pointed to something considered by the walker to already
@@ -235,25 +297,10 @@ STDIN.each do |line|
     case commit.type
     when :commit
       # The ref points to a commit, i.e. the ref is a lightweight tag.
-      if (REPO.config['hooks.allowunsignedtags'] != 'true') ||
-         (REPO.config['hooks.allowunannotated'] != 'true')
-        puts "*** The un-annotated tag #{ref} is not allowed in this repository."
-        puts "*** Use 'git tag [ -a | -s ]' for tags you want to propagate."
-        exit 1
-      end
+      exit 1 unless allow_lightweight_tag?(ref)
     when :tag
       # The ref is an annotated tag
-      if rev_old.to_i(16).zero? && (REPO.config['hooks.allowmodifytag'] != 'true')
-        puts "*** Tag #{ref} already exists."
-        puts '*** Modifying a tag is not allowed in this repository.'
-      elsif REPO.config['hooks.allowunsignedtags'] != 'true'
-        if allowed
-          puts "*** Good signature on tag #{ref} by #{signer} (#{fingerprint})."
-        else
-          puts "*** Rejecting tag #{ref} due to lack of a valid GPG signature."
-          exit 1
-        end
-      end
+      exit 1 unless allow_annotated_tag?(rev_old, ref)
     else
       puts "*** No new commits, but the pushed ref #{ref} is a \"#{commit.type}\" instead of a tag? I'm confused."
       exit 1
