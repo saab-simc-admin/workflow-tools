@@ -222,14 +222,18 @@ def allow_lightweight_tag?(ref)
 end
 
 # Check if the annotated tag +ref+, currently pointing to commit ID
-# +commit+, should be allowed to be created or updated.
-def allow_annotated_tag?(old, ref)
-  if old.to_i(16).zero? && (REPO.config['hooks.allowmodifytag'] != 'true')
+# +old+, should be allowed to be created or updated to point to commit
+# ID +new+.
+def allow_annotated_tag?(old, new, ref)
+  if old.to_i(16).nonzero? && (REPO.config['hooks.allowmodifytag'] != 'true')
     puts "*** Tag #{ref} already exists."
     puts '*** Modifying a tag is not allowed in this repository.'
     return false
   elsif REPO.config['hooks.allowunsignedtags'] != 'true'
-    signature, plaintext = Rugged::Commit.extract_signature(REPO, commit.oid)
+    signed = false
+    fingerprint = ''
+    signer = ''
+    signature, plaintext = Rugged::Tag.extract_signature(REPO, new)
     CRYPTO.verify(signature, signed_text: plaintext) do |signature|
       signed = signature.valid?
       if signed
@@ -301,7 +305,7 @@ STDIN.each do |line|
       exit 1 unless allow_lightweight_tag?(ref)
     when :tag
       # The ref is an annotated tag
-      exit 1 unless allow_annotated_tag?(rev_old, ref)
+      exit 1 unless allow_annotated_tag?(rev_old, rev_new, ref)
     else
       puts "*** No new commits, but the pushed ref #{ref} is a \"#{commit.type}\" instead of a tag? I'm confused."
       exit 1
