@@ -234,11 +234,13 @@ def allow_annotated_tag?(old, new, ref)
     fingerprint = ''
     signer = ''
     signature, plaintext = Rugged::Tag.extract_signature(REPO, new)
-    CRYPTO.verify(signature, signed_text: plaintext) do |signature|
-      signed = signature.valid?
-      if signed
-        fingerprint = signature.fingerprint
-        signer = find_signer(fingerprint)
+    if signature && plaintext
+      CRYPTO.verify(signature, signed_text: plaintext) do |signature|
+        signed = signature.valid?
+        if signed
+          fingerprint = signature.fingerprint
+          signer = find_signer(fingerprint)
+        end
       end
     end
     if !signed
