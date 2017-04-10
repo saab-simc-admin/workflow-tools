@@ -112,6 +112,54 @@ def accept_update_of_master?(old, new)
   return result
 end
 
+# Check if this repository accepts the signature on the object +oid+,
+# whose +type+ is either +:commit+, +:merge+, or +:tag+. For a tag,
+# +ref+ is the tag name.
+def accept_signature?(oid, type: '', ref: '')
+  case type
+  when :commit
+    return true if REPO.config['hooks.allowunsignedcommits'] == 'true'
+    extract_signature = Rugged::Commit.method(:extract_signature)
+    id = oid
+  when :merge
+    return true if REPO.config['hooks.allowunsignedcommits'] == 'true'
+    extract_signature = Rugged::Commit.method(:extract_signature)
+    id = oid
+  when :tag
+    return true if REPO.config['hooks.allowunsignedtags'] == 'true'
+    extract_signature = Rugged::Tag.method(:extract_signature)
+    id = ref
+  else
+    puts "*** Don't know how to check the signature of the #{type} with oid #{oid}."
+    return false
+  end
+
+  signed = false
+  fingerprint = nil
+  signer = nil
+
+  signature, plaintext = extract_signature.call(REPO, oid)
+  CRYPTO.verify(signature, signed_text: plaintext) do |sig|
+    signed = sig.valid?
+    if signed
+      fingerprint = sig.fingerprint
+      signer = find_signer(fingerprint)
+    end
+  end
+
+  if !signed
+    puts "*** Bad signature on #{type} #{id}."
+    return false
+  elsif signer
+    puts "*** Good signature on #{type} #{id} by #{signer} (#{fingerprint})."
+    return true
+  else
+    # Signed, but not allowed
+    puts "*** #{type.capitalize} #{id} signed by unauthorised key #{fingerprint}."
+    return false
+  end
+end
+
 # Walk the commit graph between +old+ and +new+, checking signatures
 # on each commit object encountered.
 #
@@ -150,57 +198,20 @@ def walk_graph(old, new, ref)
       commit_type = commit.type
     end
 
-    signed = false
-    fingerprint = nil
-    signer = nil
-    signature, plaintext = Rugged::Commit.extract_signature(REPO, commit.oid)
-    CRYPTO.verify(signature, signed_text: plaintext) do |signature|
-      signed = signature.valid?
-      next unless signed
-      fingerprint = signature.fingerprint
-      signer = find_signer(fingerprint)
+    if commit_type == :commit &&
+       old.to_i(16).zero? &&
+       REPO.config['hooks.denycreatebranch'] == 'true'
+      puts '*** Creating a branch is not allowed in this repository.'
+      update_allowed = false
+      break
     end
 
-    case commit_type
-    when :commit
-      if old.to_i(16).zero? && (REPO.config['hooks.denycreatebranch'] == 'true')
-        puts '*** Creating a branch is not allowed in this repository.'
-        update_allowed = false
-        break
-      end
+    if !accept_signature?(commit.oid, type: commit_type)
+      update_allowed = false
+      break
+    end
 
-      if REPO.config['hooks.allowunsignedcommits'] != 'true'
-        if !signed
-          puts "*** Bad signature on commit #{commit.oid}."
-          update_allowed = false
-          break
-        elsif signer
-          puts "*** Good signature on commit #{commit.oid} by #{signer} (#{fingerprint})."
-        else
-          # Signed, but not allowed
-          puts "*** Commit #{commit.oid} signed by unauthorised key #{fingerprint}."
-          update_allowed = false
-          break
-        end
-      end
-
-    when :merge
-      if REPO.config['hooks.allowunsignedcommits'] != 'true'
-        if !signed
-          puts "*** Bad signature on merge #{commit.oid}."
-          update_allowed = false
-          break
-        elsif signer
-          puts "*** Good signature on merge #{commit.oid} by #{signer} (#{fingerprint})."
-        else
-          # Signed, but not allowed
-          puts "*** Merge #{commit.oid} signed by unauthorised key #{fingerprint}."
-          update_allowed = false
-          break
-        end
-      end
-
-    else
+    if commit_type != :commit && commit_type != :merge
       puts "*** Unknown type of update to ref #{ref} of type #{commit_type}."
       update_allowed = false
       break
@@ -229,31 +240,8 @@ def allow_annotated_tag?(old, new, ref)
     puts "*** Tag #{ref} already exists."
     puts '*** Modifying a tag is not allowed in this repository.'
     return false
-  elsif REPO.config['hooks.allowunsignedtags'] != 'true'
-    signed = false
-    fingerprint = nil
-    signer = nil
-    signature, plaintext = Rugged::Tag.extract_signature(REPO, new)
-    if signature && plaintext
-      CRYPTO.verify(signature, signed_text: plaintext) do |signature|
-        signed = signature.valid?
-        if signed
-          fingerprint = signature.fingerprint
-          signer = find_signer(fingerprint)
-        end
-      end
-    end
-    if !signed
-      puts "*** Bad signature on tag #{ref}."
-      return false
-    elsif signer
-      puts "*** Good signature on tag #{ref} by #{signer} (#{fingerprint})."
-      return true
-    else
-      # Signed, but not allowed
-      puts "*** Tag #{ref} signed by unauthorised key #{fingerprint}."
-      return false
-    end
+  else
+    return accept_signature?(new, type: :tag, ref: ref)
   end
 end
 
