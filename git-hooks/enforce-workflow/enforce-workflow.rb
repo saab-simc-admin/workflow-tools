@@ -139,11 +139,13 @@ def accept_signature?(oid, type: '', ref: '')
   signer = nil
 
   signature, plaintext = extract_signature.call(REPO, oid)
-  CRYPTO.verify(signature, signed_text: plaintext) do |sig|
-    signed = sig.valid?
-    if signed
-      fingerprint = sig.fingerprint
-      signer = find_signer(fingerprint)
+  if signature && plaintext
+    CRYPTO.verify(signature, signed_text: plaintext) do |sig|
+      signed = sig.valid?
+      if signed
+        fingerprint = sig.fingerprint
+        signer = find_signer(fingerprint)
+      end
     end
   end
 
