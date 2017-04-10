@@ -231,8 +231,8 @@ def allow_annotated_tag?(old, new, ref)
     return false
   elsif REPO.config['hooks.allowunsignedtags'] != 'true'
     signed = false
-    fingerprint = ''
-    signer = ''
+    fingerprint = nil
+    signer = nil
     signature, plaintext = Rugged::Tag.extract_signature(REPO, new)
     if signature && plaintext
       CRYPTO.verify(signature, signed_text: plaintext) do |signature|
@@ -250,7 +250,8 @@ def allow_annotated_tag?(old, new, ref)
       puts "*** Good signature on tag #{ref} by #{signer} (#{fingerprint})."
       return true
     else
-      puts "*** Rejecting tag #{ref} due to lack of a valid GPG signature."
+      # Signed, but not allowed
+      puts "*** Tag #{ref} signed by unauthorised key #{fingerprint}."
       return false
     end
   end
