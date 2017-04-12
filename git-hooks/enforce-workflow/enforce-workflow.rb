@@ -177,8 +177,14 @@ def walk_graph(old, new, ref)
 
   # old is nothing, so this is the creation of a new ref.
   if old.to_i(16).zero?
-    # List everything reachable from new but not any heads.
-    REPO.references.each('refs/heads/*') { |ref| walker.hide(ref.target.oid) }
+    # List everything reachable from new but not any old heads.
+    # However, when this is run locally as a pre-push hook, ref has
+    # already been updated, so hiding that would exclude the entire
+    # graph.
+    REPO.references.
+           each('refs/heads/*').
+           reject { |r| r.name == ref }.
+           map { |ref| walker.hide(ref.target.oid) }
   else
     # old was already in the tree, so it must by definition be OK.
     walker.hide(old)
@@ -235,8 +241,8 @@ def allow_lightweight_tag?(ref)
 end
 
 # Check if the annotated tag +ref+, currently pointing to commit ID
-# +old+, should be allowed to be created or updated to point to commit
-# ID +new+.
+# +old+ (or 0 if a new reference), should be allowed to be created or
+# updated to point to commit ID +new+.
 def allow_annotated_tag?(old, new, ref)
   if old.to_i(16).nonzero? && (REPO.config['hooks.allowmodifytag'] != 'true')
     puts "*** Tag #{ref} already exists."
@@ -247,28 +253,16 @@ def allow_annotated_tag?(old, new, ref)
   end
 end
 
-# Calling convention, from githooks(5):
-#
-# This hook executes once for the receive operation. It takes no
-# arguments, but for each ref to be updated it receives on standard
-# input a line of the format:
-#
-#     <old-value> SP <new-value> SP <ref-name> LF
-#
-# where <old-value> is the old object name stored in the ref,
-# <new-value> is the new object name to be stored in the ref and
-# <ref-name> is the full name of the ref. When creating a new ref,
-# <old-value> is 40 0.
-
-STDIN.each do |line|
-  rev_old, rev_new, ref = line.split
-
+# Check if the update of +ref+ from +rev_old+ to +rev_new+ should be
+# allowed. Returns if it should be accepted, exits the program with
+# status 1 if it should be rejected.
+def enforce_workflow(rev_old, rev_new, ref)
   # A hash full of zeroes is how Git represents "nothing".
   if rev_new.to_i(16).zero?
     # Deletion of a ref. This needs to be handled separately, since
     # the walker can't handle a start ID of 0x0.
     exit 1 unless accept_deletion?(ref)
-    next
+    return
   end
 
   # Normally, the only commits allowed on master are merges which have
