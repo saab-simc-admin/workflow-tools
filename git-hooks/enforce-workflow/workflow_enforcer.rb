@@ -50,7 +50,11 @@ class WorkflowEnforcer
     @repo = Rugged::Repository.new('.')
     @crypto = GPGME::Crypto.new
 
-    @collaborators = YAML.load_file(@repo.path + 'collaborators.yaml')
+    if ignore_collaborators?
+      @collaborators = nil
+    else
+      @collaborators = YAML.load_file(@repo.path + 'collaborators.yaml')
+    end
   end
 
   def find_signer(keyid)
@@ -66,7 +70,11 @@ class WorkflowEnforcer
       return false
     end
 
-    @collaborators.key(keys[0].fingerprint)
+    if ignore_collaborators?
+      "dummy signer always accepted by local checks"
+    else
+      @collaborators.key(keys[0].fingerprint)
+    end
   end
 
   # Check if the repository configuration accepts deleting the reference
@@ -301,5 +309,19 @@ class WorkflowEnforcer
         exit 1
       end
     end
+  end
+
+  def self.ignore_collaborators=(maybe)
+    @@ignore_collaborators = maybe
+  end
+
+  def self.ignore_collaborators
+    @@ignore_collaborators ||= false
+  end
+
+  private
+
+  def ignore_collaborators?
+    self.class.ignore_collaborators
   end
 end
