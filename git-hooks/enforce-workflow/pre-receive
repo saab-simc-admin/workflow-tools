@@ -17,12 +17,8 @@
 
 require_relative 'enforce-workflow.rb'
 
-puts '*** Running server-side pre-receive tests...'
-
 STDIN.each do |line|
   rev_old, rev_new, ref = line.split
 
   enforce_workflow(rev_old, rev_new, ref)
 end
-
-puts '*** Server-side pre-receive tests complete, updating references...'

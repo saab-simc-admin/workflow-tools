@@ -15,12 +15,8 @@
 
 require_relative 'enforce-workflow.rb'
 
-puts '*** Running local pre-push tests...'
-
 STDIN.each do |line|
   _, rev_new, ref, rev_old = line.split
 
   enforce_workflow(rev_old, rev_new, ref)
 end
-
-puts '*** Local pre-push tests complete, pushing...'
