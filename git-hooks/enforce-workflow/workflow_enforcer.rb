@@ -1,45 +1,4 @@
 #!/usr/bin/env ruby
-##############################################################################
-#
-# enforce-workflow
-# -------------------------
-# A server-side pre-receive git hook for checking the GPG signature
-# and other small workflow things of a pushed commit.
-#
-# Allowed signers
-# ---------------
-# Move collaborators.yaml to the .git/ directory of your repository
-# and write your usernames and GnuPG key fingerprints in it. The
-# format is a YAML hash from usernames to 40-character hexadecimal
-# fingerprint strings without spaces.
-#
-# Config
-# ------
-# hooks.allowunsignedcommits
-#   This boolean sets whether unsigned commits are allowed. By
-#   default, they are not allowed.
-# hooks.allowunsignedtags
-#   This boolean sets whether unsigned tags are allowed. By default,
-#   they are not allowed.
-# hooks.allowcommitsonmaster
-#   This boolean sets whether non-merge commits are allowed on master. By
-#   default, these are not allowed.
-# hooks.allowunannotated
-#   This boolean sets whether unannotated tags will be allowed into the
-#   repository.  By default they won't be.
-# hooks.allowdeletetag
-#   This boolean sets whether deleting tags will be allowed in the
-#   repository.  By default they won't be.
-# hooks.allowmodifytag
-#   This boolean sets whether a tag may be modified after creation. By default
-#   it won't be.
-# hooks.allowdeletebranch
-#   This boolean sets whether deleting branches will be allowed in the
-#   repository.  By default they won't be.
-# hooks.denycreatebranch
-#   This boolean sets whether remotely creating branches will be denied
-#   in the repository.  By default this is allowed.
-##############################################################################
 
 require 'rugged'
 require 'gpgme'
