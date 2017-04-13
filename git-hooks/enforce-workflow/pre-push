@@ -13,10 +13,12 @@
 # this hook is to warn the user about things the server will reject,
 # and the server doesn't care about our local name for the ref.
 
-require_relative 'enforce-workflow.rb'
+require_relative 'workflow_enforcer.rb'
+
+e = WorkflowEnforcer.new
 
 STDIN.each do |line|
   _, rev_new, ref, rev_old = line.split
 
-  enforce_workflow(rev_old, rev_new, ref)
+  e.enforce_workflow(rev_old, rev_new, ref)
 end

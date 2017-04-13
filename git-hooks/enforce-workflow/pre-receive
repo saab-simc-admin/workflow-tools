@@ -15,10 +15,12 @@
 # <ref-name> is the full name of the ref. When creating a new ref,
 # <old-value> is 40 0.
 
-require_relative 'enforce-workflow.rb'
+require_relative 'workflow_enforcer.rb'
+
+e = WorkflowEnforcer.new
 
 STDIN.each do |line|
   rev_old, rev_new, ref = line.split
 
-  enforce_workflow(rev_old, rev_new, ref)
+  e.enforce_workflow(rev_old, rev_new, ref)
 end
