@@ -5,11 +5,25 @@ require 'gpgme'
 require 'yaml'
 
 class WorkflowEnforcer
-  def initialize
+  # :call-seq:
+  # WorkflowEnforcer.new [<option>: true, ...]
+  #
+  # Create a new WorkflowEnforcer object, modifying its behaviour
+  # according to the supplied options.
+  #
+  # Recognized options are:
+  #
+  # [+ignore_collaborators+] Don't load <tt>collaborators.yaml</tt>,
+  #                          and skip checking the list of allowed
+  #                          signers. Signature validation is still
+  #                          performed.
+  def initialize(ignore_collaborators: false)
+    @ignore_collaborators = ignore_collaborators
+
     @repo = Rugged::Repository.new('.')
     @crypto = GPGME::Crypto.new
 
-    if ignore_collaborators?
+    if @ignore_collaborators
       @collaborators = nil
     else
       @collaborators = YAML.load_file(@repo.path + 'collaborators.yaml')
@@ -29,8 +43,8 @@ class WorkflowEnforcer
       return false
     end
 
-    if ignore_collaborators?
-      "dummy signer always accepted by local checks"
+    if @ignore_collaborators
+      'dummy signer always accepted by local checks'
     else
       @collaborators.key(keys[0].fingerprint)
     end
@@ -268,19 +282,5 @@ class WorkflowEnforcer
         exit 1
       end
     end
-  end
-
-  def self.ignore_collaborators=(maybe)
-    @@ignore_collaborators = maybe
-  end
-
-  def self.ignore_collaborators
-    @@ignore_collaborators ||= false
-  end
-
-  private
-
-  def ignore_collaborators?
-    self.class.ignore_collaborators
   end
 end
