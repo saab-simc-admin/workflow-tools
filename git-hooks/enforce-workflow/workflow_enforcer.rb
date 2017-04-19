@@ -17,8 +17,15 @@ class WorkflowEnforcer
   #                          and skip checking the list of allowed
   #                          signers. Signature validation is still
   #                          performed.
-  def initialize(ignore_collaborators: false)
+  #
+  # [+ignore_missing_collaborators+] Check the list of allowed
+  #                                  signers, and warn for (but allow)
+  #                                  correctly signed commits whose
+  #                                  signers are not in the list.
+  def initialize(ignore_collaborators: false,
+                 ignore_missing_collaborators: false)
     @ignore_collaborators = ignore_collaborators
+    @ignore_missing_collaborators = ignore_missing_collaborators
 
     @repo = Rugged::Repository.new('.')
     @crypto = GPGME::Crypto.new
@@ -46,7 +53,11 @@ class WorkflowEnforcer
     if @ignore_collaborators
       'dummy signer always accepted by local checks'
     else
-      @collaborators.key(keys[0].fingerprint)
+      signer = @collaborators.key(keys[0].fingerprint)
+      if !signer && @ignore_missing_collaborators
+        signer = 'signer missing from collaborators.yaml'
+      end
+      signer
     end
   end
 
