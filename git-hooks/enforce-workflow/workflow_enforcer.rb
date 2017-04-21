@@ -22,10 +22,9 @@ class WorkflowEnforcer
   #                                  signers, and warn for (but allow)
   #                                  correctly signed commits whose
   #                                  signers are not in the list.
-  def initialize(ignore_collaborators: false,
-                 ignore_missing_collaborators: false)
-    @ignore_collaborators = ignore_collaborators
-    @ignore_missing_collaborators = ignore_missing_collaborators
+  def initialize(**kwargs)
+    @ignore_collaborators = kwargs[:ignore_collaborators]
+    @ignore_missing_collaborators = kwargs[:ignore_missing_collaborators]
 
     @repo = Rugged::Repository.new('.')
     @crypto = GPGME::Crypto.new
