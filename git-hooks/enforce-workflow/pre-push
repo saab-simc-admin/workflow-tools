@@ -1,0 +1,24 @@
+#!/usr/bin/env ruby
+
+# Run enforce-workflow.rb when invoked as a Git pre-push hook.
+
+# Calling convention, from githooks(5):
+#
+# Information about what is to be pushed is provided on the hook's
+# standard input with lines of the form:
+#
+#     <local ref> SP <local sha1> SP <remote ref> SP <remote sha1> LF
+
+# Local ref is ignored, since in pre-push mode the primary purpose of
+# this hook is to warn the user about things the server will reject,
+# and the server doesn't care about our local name for the ref.
+
+require_relative 'workflow_enforcer.rb'
+
+e = WorkflowEnforcer.new(ignore_missing_collaborators_file: true)
+
+STDIN.each do |line|
+  _, rev_new, ref, rev_old = line.split
+
+  e.enforce_workflow(rev_old, rev_new, ref)
+end

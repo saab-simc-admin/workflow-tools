@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+
+# Run enforce-workflow.rb when invoked as a Git pre-receive hook.
+
+# Calling convention, from githooks(5):
+#
+# This hook executes once for the receive operation. It takes no
+# arguments, but for each ref to be updated it receives on standard
+# input a line of the format:
+#
+#     <old-value> SP <new-value> SP <ref-name> LF
+#
+# where <old-value> is the old object name stored in the ref,
+# <new-value> is the new object name to be stored in the ref and
+# <ref-name> is the full name of the ref. When creating a new ref,
+# <old-value> is 40 0.
+
+require_relative 'workflow_enforcer.rb'
+
+e = WorkflowEnforcer.new
+
+STDIN.each do |line|
+  rev_old, rev_new, ref = line.split
+
+  e.enforce_workflow(rev_old, rev_new, ref)
+end
