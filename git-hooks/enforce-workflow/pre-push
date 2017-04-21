@@ -15,7 +15,7 @@
 
 require_relative 'workflow_enforcer.rb'
 
-e = WorkflowEnforcer.new(ignore_missing_collaborators: true)
+e = WorkflowEnforcer.new(ignore_missing_collaborators_file: true)
 
 STDIN.each do |line|
   _, rev_new, ref, rev_old = line.split

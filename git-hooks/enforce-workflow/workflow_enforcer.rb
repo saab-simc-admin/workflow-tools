@@ -13,26 +13,35 @@ class WorkflowEnforcer
   #
   # Recognized options are:
   #
-  # [+ignore_collaborators+] Don't load <tt>collaborators.yaml</tt>,
-  #                          and skip checking the list of allowed
-  #                          signers. Signature validation is still
-  #                          performed.
+  # [+ignore_collaborators+]
+  #   Don't load <tt>collaborators.yaml</tt>, and skip checking the
+  #   list of allowed signers. Signature validation is still
+  #   performed.
   #
-  # [+ignore_missing_collaborators+] Check the list of allowed
-  #                                  signers, and warn for (but allow)
-  #                                  correctly signed commits whose
-  #                                  signers are not in the list.
+  # [+ignore_missing_collaborators+]
+  #   Check the list of allowed signers, and warn for (but allow)
+  #   correctly signed commits whose signers are not in the list.
+  #
+  # [+ignore_missing_collaborators_file+]
+  #   If <tt>collaborators.yaml</tt> exists, check signatures against
+  #   it with failures being errors. If the file does not exist, skip
+  #   the check.
   def initialize(**kwargs)
     @ignore_collaborators = kwargs[:ignore_collaborators]
     @ignore_missing_collaborators = kwargs[:ignore_missing_collaborators]
+    @ignore_missing_collaborators_file = kwargs[:ignore_missing_collaborators_file]
 
     @repo = Rugged::Repository.new('.')
     @crypto = GPGME::Crypto.new
 
-    if @ignore_collaborators
-      @collaborators = nil
-    else
-      @collaborators = YAML.load_file(@repo.path + 'collaborators.yaml')
+    @collaborators = nil
+
+    unless @ignore_collaborators
+      begin
+        @collaborators = YAML.load_file(@repo.path + 'collaborators.yaml')
+      rescue Errno::ENOENT
+        raise unless @ignore_missing_collaborators_file
+      end
     end
   end
 
@@ -49,7 +58,7 @@ class WorkflowEnforcer
       return false
     end
 
-    if @ignore_collaborators
+    if !@collaborators
       'dummy signer always accepted by local checks'
     else
       signer = @collaborators.key(keys[0].fingerprint)
