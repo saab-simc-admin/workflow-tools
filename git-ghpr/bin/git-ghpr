@@ -35,7 +35,8 @@ EOF
 
 get-pr-from-api()
 {
-    json=$(curl --silent https://api.github.com/repos/$org/$repo/pulls/$1)
+    json=$(curl --user-agent 'git-ghpr (https://github.com/saab-simc-admin/workflow-tools)' \
+                --silent https://api.github.com/repos/$org/$repo/pulls/$1)
     source=$(<<< $json jq -r '@text "\(.head.repo.owner.login)"')
     branch=$(<<< $json jq -r '@text "\(.head.ref)"')
     source_url=https://github.com/$(<<< $json jq -r '@text "\(.head.repo.full_name)"')
@@ -45,7 +46,8 @@ github-list()
 {
     [ $# = 1 ] || usage
 
-    curl --silent https://api.github.com/repos/$org/$repo/pulls | \
+    curl --user-agent 'git-ghpr (https://github.com/saab-simc-admin/workflow-tools)' \
+         --silent https://api.github.com/repos/$org/$repo/pulls | \
         jq -r \
            '.[] |
             @text "\(.number) (\(.head.label)): \(.title)"'
