@@ -3,7 +3,9 @@
 usage()
 {
     cat <<EOF >&2
-usage: $(basename $0) <command> <github-fork>:<branch> <pullrequest#>
+usage: $(basename $0) list
+       $(basename $0) <command> (<pullrequest#>)
+       $(basename $0) <command> <github-fork>:<branch> <pullrequest#>
 
 GitHub pull request helper.
 
@@ -14,9 +16,9 @@ Commands:
 
 list:   List open pull requests in the upstream repository.
 
-show <pullrequest#>: Show detailed information about a pull request.
+show <pr#>: Show detailed information about a pull request.
 
-pull:   Pulls forked branch into local branch of upstream/master, and
+pull <pr#>: Pulls forked branch into local branch of upstream/master, and
         leaves it in a non-committed state for inspection and testing.
 
 commit: Commits merge with a GPG signed constructed commit message.
@@ -65,6 +67,32 @@ Branch: \(.head.ref)
 \(.body)"'
 }
 
+github-pull()
+{
+    [ $# = 2 ] || usage
+
+    local org repo preq json source branch source_url merge_base merge_head
+    org=$(git remote get-url upstream | cut -d: -f2 | cut -d/ -f1)
+    repo=$(basename $(git remote get-url upstream | cut -d: -f2 | cut -d/ -f2) .git)
+    preq=$2
+    json=$(curl --silent https://api.github.com/repos/$org/$repo/pulls/$preq)
+    source=$(<<< $json jq -r '@text "\(.head.repo.owner.login)"')
+    branch=$(<<< $json jq -r '@text "\(.head.ref)"')
+    source_url=https://github.com/$(<<< $json jq -r '@text "\(.head.repo.full_name)"')
+
+    git checkout -b ${source}-${branch} upstream/master || return
+    git pull --ff-only || return
+    git pull --no-ff --verify-signatures --no-commit "$source_url" "$branch" || return
+    merge_base=$(cat "$topdir/.git/ORIG_HEAD")
+    merge_head=$(cat "$topdir/.git/MERGE_HEAD")
+
+    cat <<EOF >$msgfile
+Merge pull request #$preq from $source/$branch
+
+EOF
+    git log --pretty='* %h %s' $merge_base..$merge_head >>$msgfile
+}
+
 parse-command-line()
 {
     [ $# = 3 ] || usage
@@ -78,25 +106,6 @@ parse-command-line()
     source_url=https://github.com/$source/$project
     preq=$3
     msgfile="$topdir/.git/PULL_REQUEST_EDITMSG"
-}
-
-github-pull()
-{
-    parse-command-line "$@"
-
-    local merge_base merge_head
-
-    git checkout -b ${source}-${branch} upstream/master || return
-    git pull --ff-only || return
-    git pull --no-ff --verify-signatures --no-commit "$source_url" "$branch" || return
-    merge_base=$(cat "$topdir/.git/ORIG_HEAD")
-    merge_head=$(cat "$topdir/.git/MERGE_HEAD")
-
-    cat <<EOF >$msgfile
-Merge pull request #$preq from $source/$branch
-
-EOF
-    git log --pretty='* %h %s' $merge_base..$merge_head >>$msgfile
 }
 
 github-commit()
