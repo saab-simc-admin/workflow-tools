@@ -80,7 +80,7 @@ github-pull()
 
     get-pr-from-api $2
 
-    local preq merge_base merge_head
+    local merge_base merge_head
 
     git checkout -b ${source}-${branch} upstream/master || return
     git pull --ff-only || return
@@ -89,7 +89,7 @@ github-pull()
     merge_head=$(cat "$topdir/.git/MERGE_HEAD")
 
     cat <<EOF >$msgfile
-Merge pull request #$preq from $source/$branch
+Merge pull request #$2 from $source/$branch
 
 EOF
     git log --pretty='* %h %s' $merge_base..$merge_head >>$msgfile
