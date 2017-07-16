@@ -14,6 +14,8 @@ Commands:
 
 list:   List open pull requests in the upstream repository.
 
+show <pullrequest#>: Show detailed information about a pull request.
+
 pull:   Pulls forked branch into local branch of upstream/master, and
         leaves it in a non-committed state for inspection and testing.
 
@@ -38,6 +40,29 @@ github-list()
         jq -r \
            '.[] |
             @text "\(.number) (\(.head.label)): \(.title)"'
+}
+
+github-show()
+{
+    [ $# = 2 ] || usage
+
+    local org repo num
+    org=$(git remote get-url upstream | cut -d: -f2 | cut -d/ -f1)
+    repo=$(basename $(git remote get-url upstream | cut -d: -f2 | cut -d/ -f2) .git)
+    curl --silent https://api.github.com/repos/$org/$repo/pulls/$2 | \
+        jq -r \
+           '@text
+"Pull request #\(.number): \(.title)
+URL: \(.html_url)
+Label: \(.head.label)
+\(.commits) commits
+State: \(.state)
+Last update: \(.updated_at)
+Created by: \(.user.login)
+From repo: \(.head.repo.full_name)
+Branch: \(.head.ref)
+
+\(.body)"'
 }
 
 parse-command-line()
@@ -100,7 +125,7 @@ github-reset()
 }
 
 case "$1" in
-    list|pull|commit|push|reset)
+    list|show|pull|commit|push|reset)
         eval github-$1 "$@" ;;
     *)
         usage ;;
