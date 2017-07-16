@@ -11,9 +11,10 @@ The hook is available in two forms, `pre-push` for local checks on the
 client, to check that you aren't pushing something obviously wrong,
 and `pre-receive` for server-side enforcement.
 
-The `pre-push` hook does not validate signers, since that list is not
-necessarily available on the client side. Signatures are still checked
-for validity by GnuPG.
+In the `pre-push` hook, validation of signers is optional, since that
+list is not necessarily available on the client side and it can't do
+any enforcement anyway. Signatures are still checked for validity by
+GnuPG.
 
 
 ## Installation
@@ -22,11 +23,13 @@ Place `workflow_enforcer.rb` and the correct wrapper (`pre-push` on
 clients, `pre-receive` on servers) in your Git hooks directory,
 `.git/hooks/`.
 
-For the server-side `pre-receive` hook, also place the
-`collaborators.yaml` file in your `.git/` directory. This file should
-contain a YAML hash from usernames to GnuPG key fingerprints
-(40-character hex strings). Generate fingerprints by running `gpg
---fingerprint --with-colons <e-mail> | grep ^fpr | cut -d: -f 10`.
+For signer validation (required for `pre-receive`, optional for
+`pre-push`), also place the `collaborators.yaml` file in your `.git/`
+directory. This file should contain a YAML hash from usernames to
+GnuPG key fingerprints (40-character hex strings). Generate
+fingerprints by running `gpg --fingerprint --with-colons <e-mail> |
+grep ^fpr | cut -d: -f 10`. Only keys appearing in this list will be
+allowed to sign commits.
 
 
 ## Configuration
