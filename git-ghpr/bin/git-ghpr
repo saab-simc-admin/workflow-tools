@@ -93,11 +93,15 @@ EOF
     git log --pretty='* %h %s' $merge_base..$merge_head >>$msgfile
 }
 
+github-commit()
+{
+    git commit -S -e -F $msgfile || return
+}
+
 parse-command-line()
 {
     [ $# = 3 ] || usage
 
-    topdir=$(git rev-parse --show-toplevel)
     upstream_url=$(git remote get-url upstream)
     project=$(basename $upstream_url .git)
     source=$(<<< "$2" cut -d: -f1 --only-delimited)
@@ -105,14 +109,6 @@ parse-command-line()
     [ -z "$source" -o -z "$branch" ] && usage
     source_url=https://github.com/$source/$project
     preq=$3
-    msgfile="$topdir/.git/PULL_REQUEST_EDITMSG"
-}
-
-github-commit()
-{
-    parse-command-line "$@"
-
-    git commit -S -e -F $msgfile || return
 }
 
 github-push()
@@ -132,6 +128,9 @@ github-reset()
     git checkout master
     git branch -D ${source}-${branch}
 }
+
+topdir=$(git rev-parse --show-toplevel)
+msgfile="$topdir/.git/PULL_REQUEST_EDITMSG"
 
 case "$1" in
     list|show|pull|commit|push|reset)
