@@ -4,8 +4,7 @@ usage()
 {
     cat <<EOF >&2
 usage: $(basename $0) list
-       $(basename $0) <command> (<pullrequest#>)
-       $(basename $0) <command> <github-fork>:<branch> <pullrequest#>
+       $(basename $0) <command> <pullrequest#>
 
 GitHub pull request helper.
 
@@ -14,30 +13,38 @@ repository
 
 Commands:
 
-list:   List open pull requests in the upstream repository.
+list:           List open pull requests in the upstream repository.
 
-show <pr#>: Show detailed information about a pull request.
+show <pr#>:     Show detailed information about a pull request.
 
-pull <pr#>: Pulls forked branch into local branch of upstream/master, and
-        leaves it in a non-committed state for inspection and testing.
+pull <pr#>:     Pulls forked branch into local branch of upstream/master,
+                and leaves it in a non-committed state for inspection
+                and testing.
 
-commit: Commits merge with a GPG signed constructed commit message.
+commit (<pr#>): Commits merge with a GPG signed constructed commit
+                message. Pull request number is allowed, but not used.
 
-push:   Pushes to "upstream master" and cleans up temporary branch.
+push <pr#>:     Pushes to "upstream master" and cleans up temporary
+                branch.
 
-reset:  Resets working copy to local master and deletes the temporary
-        pull request branch.
-
-WARNING: No github API validation of the PR is done.
+reset <pr#>:    Resets working copy to local master and deletes the
+                temporary pull request branch.
 EOF
     exit 1
 }
 
+get-pr-from-api()
+{
+    json=$(curl --silent https://api.github.com/repos/$org/$repo/pulls/$1)
+    source=$(<<< $json jq -r '@text "\(.head.repo.owner.login)"')
+    branch=$(<<< $json jq -r '@text "\(.head.ref)"')
+    source_url=https://github.com/$(<<< $json jq -r '@text "\(.head.repo.full_name)"')
+}
+
 github-list()
 {
-    local org repo
-    org=$(git remote get-url upstream | cut -d: -f2 | cut -d/ -f1)
-    repo=$(basename $(git remote get-url upstream | cut -d: -f2 | cut -d/ -f2) .git)
+    [ $# = 1 ] || usage
+
     curl --silent https://api.github.com/repos/$org/$repo/pulls | \
         jq -r \
            '.[] |
@@ -48,12 +55,10 @@ github-show()
 {
     [ $# = 2 ] || usage
 
-    local org repo num
-    org=$(git remote get-url upstream | cut -d: -f2 | cut -d/ -f1)
-    repo=$(basename $(git remote get-url upstream | cut -d: -f2 | cut -d/ -f2) .git)
-    curl --silent https://api.github.com/repos/$org/$repo/pulls/$2 | \
-        jq -r \
-           '@text
+    get-pr-from-api $2
+
+    <<< $json jq -r \
+        '@text
 "Pull request #\(.number): \(.title)
 URL: \(.html_url)
 Label: \(.head.label)
@@ -71,14 +76,9 @@ github-pull()
 {
     [ $# = 2 ] || usage
 
-    local org repo preq json source branch source_url merge_base merge_head
-    org=$(git remote get-url upstream | cut -d: -f2 | cut -d/ -f1)
-    repo=$(basename $(git remote get-url upstream | cut -d: -f2 | cut -d/ -f2) .git)
-    preq=$2
-    json=$(curl --silent https://api.github.com/repos/$org/$repo/pulls/$preq)
-    source=$(<<< $json jq -r '@text "\(.head.repo.owner.login)"')
-    branch=$(<<< $json jq -r '@text "\(.head.ref)"')
-    source_url=https://github.com/$(<<< $json jq -r '@text "\(.head.repo.full_name)"')
+    get-pr-from-api $2
+
+    local preq merge_base merge_head
 
     git checkout -b ${source}-${branch} upstream/master || return
     git pull --ff-only || return
@@ -95,25 +95,16 @@ EOF
 
 github-commit()
 {
+    [ $# = 1 -o $# = 2 ] || usage
+
     git commit -S -e -F $msgfile || return
-}
-
-parse-command-line()
-{
-    [ $# = 3 ] || usage
-
-    upstream_url=$(git remote get-url upstream)
-    project=$(basename $upstream_url .git)
-    source=$(<<< "$2" cut -d: -f1 --only-delimited)
-    branch=$(<<< "$2" cut -d: -f2 --only-delimited)
-    [ -z "$source" -o -z "$branch" ] && usage
-    source_url=https://github.com/$source/$project
-    preq=$3
 }
 
 github-push()
 {
-    parse-command-line "$@"
+    [ $# = 2 ] || usage
+
+    get-pr-from-api $2
 
     git push upstream HEAD:master && rm $msgfile
     git checkout master
@@ -122,7 +113,9 @@ github-push()
 
 github-reset()
 {
-    parse-command-line "$@"
+    [ $# = 2 ] || usage
+
+    get-pr-from-api $2
 
     git reset --hard
     git checkout master
@@ -131,6 +124,9 @@ github-reset()
 
 topdir=$(git rev-parse --show-toplevel)
 msgfile="$topdir/.git/PULL_REQUEST_EDITMSG"
+
+org=$(git remote get-url upstream | cut -d: -f2 | cut -d/ -f1)
+repo=$(basename $(git remote get-url upstream | cut -d: -f2 | cut -d/ -f2) .git)
 
 case "$1" in
     list|show|pull|commit|push|reset)
