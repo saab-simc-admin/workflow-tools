@@ -8,8 +8,8 @@ usage: $(basename $0) list
 
 GitHub pull request helper.
 
-Assumptions: upstream/master is the master branch of the upsteam
-repository
+Assumptions: Pull requests are made against upstream's master branch.
+
 
 Commands:
 
@@ -29,6 +29,12 @@ push <pr#>:     Pushes to "upstream master" and cleans up temporary
 
 reset <pr#>:    Resets working copy to local master and deletes the
                 temporary pull request branch.
+
+
+Configuration values:
+
+ghpr.upstreamRemote: Name of the Git remote which points to the
+                     upstream GitHub repository. Default: "upstream".
 EOF
     exit 1
 }
@@ -82,7 +88,7 @@ github-pull()
 
     local merge_base merge_head
 
-    git checkout -b ${source}-${branch} upstream/master || return
+    git checkout -b ${source}-${branch} $upstream_remote/master || return
     git pull --ff-only || return
     git pull --no-ff --verify-signatures --no-commit "$source_url" "$branch" || return
     merge_base=$(cat "$topdir/.git/ORIG_HEAD")
@@ -108,7 +114,7 @@ github-push()
 
     get-pr-from-api $2
 
-    git push upstream HEAD:master && rm $msgfile
+    git push $upstream_remote HEAD:master && rm $msgfile
     git checkout master
     git branch -d ${source}-${branch}
 }
@@ -127,8 +133,11 @@ github-reset()
 topdir=$(git rev-parse --show-toplevel)
 msgfile="$topdir/.git/PULL_REQUEST_EDITMSG"
 
-org=$(git remote get-url upstream | sed -e 's/^.*@github.com[:/]//' | cut -d/ -f1)
-repo=$(basename $(git remote get-url upstream | sed -e 's/^.*@github.com[:/]//' | cut -d/ -f2) .git)
+upstream_remote=$(git config --get ghpr.upstreamRemote)
+upstream_remote=${upstream_remote:-upstream}
+
+org=$(git remote get-url $upstream_remote | sed -e 's/^.*@github.com[:/]//' | cut -d/ -f1)
+repo=$(basename $(git remote get-url $upstream_remote | sed -e 's/^.*@github.com[:/]//' | cut -d/ -f2) .git)
 
 case "$1" in
     list|show|pull|commit|push|reset)
