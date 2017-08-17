@@ -127,8 +127,8 @@ github-reset()
 topdir=$(git rev-parse --show-toplevel)
 msgfile="$topdir/.git/PULL_REQUEST_EDITMSG"
 
-org=$(git remote get-url upstream | cut -d: -f2 | cut -d/ -f1)
-repo=$(basename $(git remote get-url upstream | cut -d: -f2 | cut -d/ -f2) .git)
+org=$(git remote get-url upstream | sed -e 's/^.*@github.com[:/]//' | cut -d/ -f1)
+repo=$(basename $(git remote get-url upstream | sed -e 's/^.*@github.com[:/]//' | cut -d/ -f2) .git)
 
 case "$1" in
     list|show|pull|commit|push|reset)
